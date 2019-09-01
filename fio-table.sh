@@ -18,6 +18,7 @@ for direct in 0 1; do
                                 --bs=${bs} \
                                 --output-format=json;
                 );
+                printf "${direct}, ";
                 printf "${bs}, ";
                 echo $RESULTS | jq '.jobs[] | .read.bw_mean' | tr -d '\n';
                 printf ", ";
