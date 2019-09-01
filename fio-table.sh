@@ -17,7 +17,6 @@
                                 --bs=${bs} \
                                 --output-format=json;
                 );
-                printf "${recordsize}, ";
                 printf "${bs}, ";
                 echo $RESULTS | jq '.jobs[] | .read.bw_mean' | tr -d '\n';
                 printf ", ";
