@@ -1,11 +1,12 @@
 #!/bin/bash
 
+for direct in 0 1; do
         for bs in 4k 8k 16k 32k 64k 128k 256k 512k 1024k; do
                 RESULTS=$(
                         fio \
                                 --randrepeat=1 \
                                 --ioengine=libaio \
-                                --direct=0 \
+                                --direct=${direct} \
                                 --gtod_reduce=1 \
                                 --name=test \
                                 --filename=test \
@@ -28,3 +29,4 @@
                 echo;
                 sleep 20;
         done;
+done;
