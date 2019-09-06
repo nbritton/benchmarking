@@ -1,0 +1,57 @@
+#!/bin/bash
+# Meta Analysis Processor
+
+tempfile=/tmp/map-dataset;
+
+
+#awk_stats='{t_bw+=sqrt(($4+$6)*($5+$7)*$3); t_iops+=sqrt(($5+$7)*(($4+$6)/$3))}';
+#awk_end='{printf "t_bw "; printf "%.0f\n",t_bw/NR; printf "t_iops "; printf "%.0f\n",t_iops/NR; print "n "NR}';
+#awk_params="${awk_stats} END ${awk_end}";
+
+awk_params='{t_bw=sqrt(($4+$6)*($5+$7)*$3); printf "%.0f ",t_bw; t_iops=sqrt(($5+$7)*(($4+$6)/$3)); printf "%.0f\n",t_iops;}';
+#awk_end='{printf "t_bw "; printf "%.0f\n",t_bw/NR; printf "t_iops "; printf "%.0f\n",t_iops/NR; print "n "NR}';
+#awk_params="${awk_stats} END ${awk_end}";
+
+awk_mean='{sum+=$column;} END {printf "%.0f ",sum/NR}';
+awk_stddev='{sum+=$column;a[NR]=$column} END {for(i in a)y+=(a[i]-(sum/NR))^2; printf "%.0f ",sqrt(y/(NR-1));}';
+
+awk '!/^#/ && NF' $1 | sed -e 's/[[:alpha:]]//g' -e 's/,//g' > ${tempfile};
+
+#awk_stats_engine() {
+#    echo ${4} | awk -v column=${1} -f - ${tempfile}-${2}-${3}-data >> ${tempfile}-${2}-${3}-stat
+#}
+
+for column1 in $(awk '{print $1}' ${tempfile} | sort -un); do
+    echo "1 ${column1}";
+    for column2 in $(awk '{print $2}' ${tempfile} | sort -un); do
+        echo "2 ${column2}";
+        for column3 in $(awk '{print $3}' ${tempfile} | sort -un); do
+            echo "3 ${column3}";
+        done
+    done
+done | sort -un -k1,1 -k 2,2 | while read column value; do
+    #printf "$column $value: ";
+    awk -v column=$column -v value="^${value}$" 'match($column,value)' ${tempfile} > ${tempfile}-${column}-${value};
+    echo ${awk_params} | awk -f - ${tempfile}-${column}-${value} > ${tempfile}-${column}-${value}-data;
+    printf "${column} ${value} " > ${tempfile}-${column}-${value}-stat;
+    for columns in $(seq $(awk '{print NF; exit}' ${tempfile}-${column}-${value}-data)); do
+       # Calculate statistics
+       echo ${awk_mean} | awk -v column=${columns} -f - ${tempfile}-${column}-${value}-data >> ${tempfile}-${column}-${value}-stat;
+       echo ${awk_stddev} | awk -v column=${columns} -f - ${tempfile}-${column}-${value}-data >> ${tempfile}-${column}-${value}-stat;
+       echo ${awk_stddev} | awk -v column=${columns} -f - ${tempfile}-*-*-data >> ${tempfile}-${column}-${value}-stat;
+    done
+    printf "$(awk 'END {printf NR}' ${tempfile}-${column}-${value}-data)" >> ${tempfile}-${column}-${value}-stat;
+done
+
+# Generate statistics output
+awk NF ${tempfile}-*-*-stat | column -t;
+
+#for file in $(ls ${tempfile}-*-stat); do
+#    cat ${file};
+#    echo;
+#done | column -t
+
+
+#| column -t
+
+#rm ${tempfile}*;
