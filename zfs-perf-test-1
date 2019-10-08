@@ -1,0 +1,38 @@
+#!/bin/bash
+for readwrite in randrw readwrite; do
+
+    results=$(
+        fio \
+            --randrepeat=1 \
+            --ioengine=libaio \
+            --direct=0 \
+            --gtod_reduce=1 \
+            --name=zfs-perf-test \
+            --directory=/var/lib/libvirt/images \
+            --filename=zfs-perf-test \
+            --iodepth=32 \
+            --size=8G \
+            --readwrite=${readwrite} \
+            --rwmixread=60 \
+            --bsrange=64k-192k \
+            --numjobs=6 \
+            --group_reporting=1 \
+            --random_distribution=zipf:0.5 \
+            --norandommap=1 \
+            --random_generator=lfsr \
+            --time_based=300 \
+            --runtime=300 \
+            --output-format=json;
+        );
+
+    echo $results | jq '.jobs[] | .read.bw_mean' | tr -d '\n';
+    printf ", ";
+    echo $results | jq '.jobs[] | .read.iops_mean' | tr -d '\n';
+    printf ", ";
+    echo $results | jq '.jobs[] | .write.bw_mean' | tr -d '\n';
+    printf ", ";
+    echo $results | jq '.jobs[] | .write.iops_mean' | tr -d '\n';
+    echo;
+    sleep 10;
+
+done | awk '{c1+=$1; c2+=$2; c3+=$3; c4+=$4;} END {printf "Read BW: ""%.1f\n",(c1/NR)*6; printf "Read IOPs: ""%.1f\n",(c2/NR)*6; printf "Write BW: ""%.1f\n",(c3/NR)*6; printf "Write IOPs: ""%.1f\n",(c4/NR)*6; printf "Total BW: ""%.1f\n",((c1+c3)/NR)*6; printf "Total IOPs: ""%.1f\n",((c2+c4)/NR)*6;}' | column -t;
