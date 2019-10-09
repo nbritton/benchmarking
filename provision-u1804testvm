@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# $1 = Starting instance iterator, i.g. 1
+# $2 = Ending instance iterator, i.g. 15
+# $3 = Subdirectory, i.g. 4-16-64-proc0123
+# $4 = Hostname base, i.g. u1804testvm
+# $5 = Base image, i.g. ubuntu-server-18-04-3-hwe-5.0-base-image.qcow2
+
+test -d ./${3} || mkdir ${3};
+
+for instance in $(seq -w ${1} ${2}); do
+
+    ### Clone Base Disk Image ###
+    cp -a ./${5} ./${3}/${4}${instance}.qcow2;
+
+    ### Mount Cloned Disk Image ###
+    guestmount -a ./${3}/${4}${instance}.qcow2 -m /dev/sda2 /mnt;
+
+    ### Due to a DHCP bug in Arris BGW210-700, we must set a unique hostname to get a lease. ###
+    hostname="${3}-${4}${instance}";
+    hostname_md5="$(printf ${hostname} | md5sum | tr -d ' \-\n')";
+
+    ### Change Hostname ###
+    sed -i "s/u1804testvm00/${hostname_md5}/" /mnt/etc/hostname;
+    sed -i "s/u1804testvm00/${hostname_md5} ${hostname}/" /mnt/etc/hosts;
+
+    ### Set Salt Minion ID ###
+    sed -i "s/u1804testvm00/${hostname}/" /mnt/etc/salt/minion_id;
+
+    ### Add User Account to Sudoers ###
+    echo "nbritton ALL=(ALL) NOPASSWD: ALL" > /mnt/etc/sudoers.d/nbritton;
+
+    ### Delete Base Image SSH System Keys ###
+    rm /mnt/etc/ssh/ssh_host_*;
+
+    ### Remount to access /dev/null, needed for dpkg-reconfigure ###
+    mount -o remount /dev/fuse /mnt;
+
+    ### Regenerate SSH System Keys ###
+    chroot /mnt dpkg-reconfigure openssh-server;
+
+    ### Fix hostname in SSH Public Keys ###
+    sed -i 's/lab01/${hostname}/' /mnt/etc/ssh/*.pub;
+
+    ### Copy authorized_keys to /root/.ssh/ ###
+    cat /mnt/home/nbritton/.ssh/authorized_keys > /mnt/root/.ssh/authorized_keys;
+
+    ### Enable Root Login via SSH Key ###
+    sed -i 's/^#PermitRootLogin/PermitRootLogin/' /mnt/etc/ssh/sshd_config;
+
+    ### Unmount Disk Image ###
+    guestunmount /mnt;
+
+    sleep 1;
+
+done
